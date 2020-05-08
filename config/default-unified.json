@@ -1,0 +1,86 @@
+{
+    "logging": {
+        "appenders": {
+          "console": { "type": "console" },
+          "logfileworker": { "type": "file", "filename": "logs/planning-worker.log"}
+        }, 
+        "categories": {
+            "default": { "appenders": ["console", "logfileworker"], "level": "debug" }
+        }
+    },
+    "server": {
+        "port": 4501,
+        "timeout": "3600000",
+        "run_categories": "*"
+    },
+    "storage": {
+        "type": "nfs",
+        "args": {
+            "path": "/tmp"
+        }
+    },
+    "planners": {
+        "optimal": {
+            "default": "delfi1",
+            "planners": {
+                "delfi1": {
+                    "cmd": "plan-delfi.sh <DOMAIN> <PROBLEM> <PLANFILE> <OUTPUT>",
+                    "basedir": "delfi"
+                }
+            }
+        },
+        "satisficing" : {
+            "default": "seq-sat-cerberus",
+            "planners": {
+                "seq-sat-cerberus": {
+                    "cmd": "plan-sat.sh <DOMAIN> <PROBLEM> <PLANFILE> <OUTPUT>",
+                    "basedir": "cerberus"
+                }
+            }
+        },
+        "agile" : {
+            "default": "seq-agl-cerberus",
+            "planners": {
+                "seq-agl-cerberus": {
+                    "cmd": "plan-agl.sh <DOMAIN> <PROBLEM> <PLANFILE> <OUTPUT>",
+                    "basedir": "cerberus"
+                }
+            }
+        },
+        "topk" : {
+            "default": "iterative-topk",
+            "planners": {
+                "iterative-topk": {
+                    "cmd": "plan.py --planner topk --domain <DOMAIN> --problem <PROBLEM> --number-of-plans <NUMPLANS> --symmetries --use-local-folder --clean-local-folder --plans-as-json --results-file <OUTPUT>",
+                    "basedir": "forbiditerative"
+                },
+                "kstar-topk" : {
+                    "cmd": "plan_topk.sh <DOMAIN> <PROBLEM> <NUMPLANS> <OUTPUT>",
+                    "basedir": "kstar"
+                }
+            }
+        },
+        "diverse" : {
+            "default": "iterative-diverse",
+            "planners": {
+                "iterative-diverse": {
+                    "cmd": "plan_diverse_sat.sh <DOMAIN> <PROBLEM> <NUMPLANS> <PLANFILE> <OUTPUT>",
+                    "basedir": "forbiditerative"
+                }
+            }
+        },
+        "topq" : {
+            "default": "iterative-unordered-topq",
+            "planners": {
+                "iterative-unordered-topq": {
+                    "cmd": "plan_unordered_topq.sh <DOMAIN> <PROBLEM> <COSTMULTBOUND> <PLANFILE> <OUTPUT>",
+                    "basedir": "forbiditerative"
+                },
+                "kstar-topq" : {
+                    "cmd": "plan_topq.sh <DOMAIN> <PROBLEM> <COSTMULTBOUND> <NUMPLANS> <OUTPUT>",
+                    "basedir": "kstar"
+                }
+            }
+        }
+    }
+}

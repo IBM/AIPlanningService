@@ -1,0 +1,123 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "version": "1.0.0",
+        "title": "Masterplan worker",
+        "description": "API to execute a variety of planners on a given planning task",
+        "contact": {
+            "name": "Michael Katz",
+            "email": "Michael.Katz1@ibm.com"
+        },
+        "license": {
+            "name": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+        }
+    },
+    "host": "",
+    "basePath": "/",
+    "schemes" : [
+        "http"
+    ],
+    "consumes": [
+        "application/json"
+    ],
+    "produces": [
+        "application/json"
+    ],
+    "definitions": {
+        "PlanningTask": {
+            "type": "object",
+            "required": [ "domain", "problem"],
+            "properties": {
+                "domain": {
+                    "type": "string",
+                    "description": "the planning domain in PDDL"
+                },
+                "problem": {
+                    "type": "string",
+                    "description": "the planning problem in PDDL"
+                },
+                "numplans": {
+                    "type": "integer",
+                    "format": "int32",
+                    "description": "for planners returning multiple plans, the requested number of plans"
+                }
+            }
+        }, 
+        "PlanningResult": {
+            "type": "object",
+            "properties": {
+                "planner": {
+                    "type": "string",
+                    "description": "planner used to achieve this result"
+                },
+                "length": {
+                    "type": "integer",
+                    "format": "int64",
+                    "description": "length of resulting plan"
+                },
+                "output": {
+                    "type": "string",
+                    "description": "planner raw output"
+                },
+                "parse_status": {
+                    "type": "string",
+                    "description": "indicates whether plan parsing was ok (for compatibility only)",
+                    "enum": [
+                        "parse_ok"
+                    ]
+                },
+                "plan": {
+                    "type": "array",
+                    "description": "list of actions in the plan",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "type": {
+                    "type": "string",
+                    "description": "type of parsing - for compatibility only",
+                    "enum": [
+                        "simple"
+                    ]
+                },
+                "logPath": {
+                    "type": "string",
+                    "description": "path to a log file, optional"
+                }, 
+                "cost": {
+                    "type": "integer",
+                    "format": "int64",
+                    "decription": "plan cost"
+                }
+            }
+        },
+        "PlanningResultMultiple": {
+            "allOf": [
+                { 
+                    "$ref": "#/definitions/PlanningResult"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "additional_results": {
+                            "type": "array",
+                            "items": {
+                                "$ref":"#/definitions/PlanningResult"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "AllPlannersResult": {
+            "type": "object",
+            "additionalProperties": {
+                "$ref":"#/definitions/PlanningResultMultiple"
+            }
+        }
+    },
+    "paths": {
+        
+    }
+}

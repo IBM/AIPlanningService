@@ -1,0 +1,626 @@
+{
+    "swagger": "2.0",
+    "info": {
+      "version": "1.0.0",
+      "title": "Masterplan worker",
+      "description": "API to execute a variety of planners on a given planning task",
+      "contact": {
+        "name": "Michael Katz",
+        "email": "Michael.Katz1@ibm.com"
+      },
+      "license": {
+        "name": "MIT",
+        "url": "https://opensource.org/licenses/MIT"
+      }
+    },
+    "host": "localhost",
+    "basePath": "/",
+    "schemes": [
+      "https"
+    ],
+    "consumes": [
+      "application/json"
+    ],
+    "produces": [
+      "application/json"
+    ],
+    "definitions": {
+      "PlanningTask": {
+        "type": "object",
+        "required": [
+          "domain",
+          "problem"
+        ],
+        "properties": {
+          "domain": {
+            "type": "string",
+            "description": "the planning domain in PDDL"
+          },
+          "problem": {
+            "type": "string",
+            "description": "the planning problem in PDDL"
+          },
+          "numplans": {
+            "type": "integer",
+            "format": "int32",
+            "description": "for planners returning multiple plans, the requested number of plans"
+          }
+        },
+        "example": {
+          "domain": "(define (domain gripper-strips)\n   (:predicates (room ?r)\n\t\t(ball ?b)\n\t\t(gripper ?g)\n\t\t(at-robby ?r)\n\t\t(at ?b ?r)\n\t\t(free ?g)\n\t\t(carry ?o ?g))\n\n   (:action move\n       :parameters  (?from ?to)\n       :precondition (and  (room ?from) (room ?to) (at-robby ?from))\n       :effect (and  (at-robby ?to)\n\t\t     (not (at-robby ?from))))\n\n\n\n   (:action pick\n       :parameters (?obj ?room ?gripper)\n       :precondition  (and  (ball ?obj) (room ?room) (gripper ?gripper)\n\t\t\t    (at ?obj ?room) (at-robby ?room) (free ?gripper))\n       :effect (and (carry ?obj ?gripper)\n\t\t    (not (at ?obj ?room)) \n\t\t    (not (free ?gripper))))\n\n\n   (:action drop\n       :parameters  (?obj  ?room ?gripper)\n       :precondition  (and  (ball ?obj) (room ?room) (gripper ?gripper)\n\t\t\t    (carry ?obj ?gripper) (at-robby ?room))\n       :effect (and (at ?obj ?room)\n\t\t    (free ?gripper)\n\t\t    (not (carry ?obj ?gripper)))))\n\n",
+          "problem": "(define (problem strips-gripper-x-2)\n   (:domain gripper-strips)\n   (:objects rooma roomb ball6 ball5 ball4 ball3 ball2 ball1 left right)\n   (:init (room rooma)\n          (room roomb)\n          (ball ball6)\n          (ball ball5)\n          (ball ball4)\n          (ball ball3)\n          (ball ball2)\n          (ball ball1)\n          (at-robby rooma)\n          (free left)\n          (free right)\n          (at ball6 rooma)\n          (at ball5 rooma)\n          (at ball4 rooma)\n          (at ball3 rooma)\n          (at ball2 rooma)\n          (at ball1 rooma)\n          (gripper left)\n          (gripper right))\n   (:goal (and (at ball6 roomb)\n               (at ball5 roomb)\n               (at ball4 roomb)\n               (at ball3 roomb)\n               (at ball2 roomb)\n               (at ball1 roomb))))",
+          "numplans": 5,
+          "qualitybound": 1
+        }
+      },
+      "PlanningResult": {
+        "type": "object",
+        "properties": {
+          "planner": {
+            "type": "string",
+            "description": "planner used to achieve this result"
+          },
+          "length": {
+            "type": "integer",
+            "format": "int64",
+            "description": "length of resulting plan"
+          },
+          "output": {
+            "type": "string",
+            "description": "planner raw output"
+          },
+          "parse_status": {
+            "type": "string",
+            "description": "indicates whether plan parsing was ok (for compatibility only)",
+            "enum": [
+              "parse_ok"
+            ]
+          },
+          "plan": {
+            "type": "array",
+            "description": "list of actions in the plan",
+            "items": {
+              "type": "string"
+            }
+          },
+          "type": {
+            "type": "string",
+            "description": "type of parsing - for compatibility only",
+            "enum": [
+              "simple"
+            ]
+          },
+          "logPath": {
+            "type": "string",
+            "description": "path to a log file, optional"
+          },
+          "cost": {
+            "type": "integer",
+            "format": "int64",
+            "decription": "plan cost"
+          }
+        }
+      },
+      "PlanningResultMultiple": {
+        "allOf": [
+          {
+            "$ref": "#/definitions/PlanningResult"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "additional_results": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/PlanningResult"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "AllPlannersResult": {
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/definitions/PlanningResultMultiple"
+        }
+      }
+    },
+    "paths": {
+      "/planners/optimal/delfi1": {
+        "post": {
+          "description": "Executes delfi1 on a planning task and returns resulting plan",
+          "operationId": "delfi1",
+          "consumes": [
+            "application/json"
+          ],
+          "parameters": [
+            {
+              "name": "task",
+              "in": "body",
+              "description": "the planning task",
+              "schema": {
+                "$ref": "#/definitions/PlanningTask"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "resulting plan",
+              "schema": {
+                "$ref": "#/definitions/PlanningResultMultiple"
+              }
+            },
+            "default": {
+              "description": "unexpected error",
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "/planners/optimal": {
+        "post": {
+          "description": "Executes optimal on a planning task and returns resulting plan",
+          "operationId": "optimal",
+          "consumes": [
+            "application/json"
+          ],
+          "parameters": [
+            {
+              "name": "task",
+              "in": "body",
+              "description": "the planning task",
+              "schema": {
+                "$ref": "#/definitions/PlanningTask"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "resulting plan",
+              "schema": {
+                "$ref": "#/definitions/PlanningResultMultiple"
+              }
+            },
+            "default": {
+              "description": "unexpected error",
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "/planners/satisficing/seq-sat-cerberus": {
+        "post": {
+          "description": "Executes seq-sat-cerberus on a planning task and returns resulting plan",
+          "operationId": "seq-sat-cerberus",
+          "consumes": [
+            "application/json"
+          ],
+          "parameters": [
+            {
+              "name": "task",
+              "in": "body",
+              "description": "the planning task",
+              "schema": {
+                "$ref": "#/definitions/PlanningTask"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "resulting plan",
+              "schema": {
+                "$ref": "#/definitions/PlanningResultMultiple"
+              }
+            },
+            "default": {
+              "description": "unexpected error",
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "/planners/satisficing": {
+        "post": {
+          "description": "Executes satisficing on a planning task and returns resulting plan",
+          "operationId": "satisficing",
+          "consumes": [
+            "application/json"
+          ],
+          "parameters": [
+            {
+              "name": "task",
+              "in": "body",
+              "description": "the planning task",
+              "schema": {
+                "$ref": "#/definitions/PlanningTask"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "resulting plan",
+              "schema": {
+                "$ref": "#/definitions/PlanningResultMultiple"
+              }
+            },
+            "default": {
+              "description": "unexpected error",
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "/planners/agile/seq-agl-cerberus": {
+        "post": {
+          "description": "Executes seq-agl-cerberus on a planning task and returns resulting plan",
+          "operationId": "seq-agl-cerberus",
+          "consumes": [
+            "application/json"
+          ],
+          "parameters": [
+            {
+              "name": "task",
+              "in": "body",
+              "description": "the planning task",
+              "schema": {
+                "$ref": "#/definitions/PlanningTask"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "resulting plan",
+              "schema": {
+                "$ref": "#/definitions/PlanningResultMultiple"
+              }
+            },
+            "default": {
+              "description": "unexpected error",
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "/planners/agile": {
+        "post": {
+          "description": "Executes agile on a planning task and returns resulting plan",
+          "operationId": "agile",
+          "consumes": [
+            "application/json"
+          ],
+          "parameters": [
+            {
+              "name": "task",
+              "in": "body",
+              "description": "the planning task",
+              "schema": {
+                "$ref": "#/definitions/PlanningTask"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "resulting plan",
+              "schema": {
+                "$ref": "#/definitions/PlanningResultMultiple"
+              }
+            },
+            "default": {
+              "description": "unexpected error",
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "/planners/topk/iterative-topk": {
+        "post": {
+          "description": "Executes iterative-topk on a planning task and returns resulting plan",
+          "operationId": "iterative-topk",
+          "consumes": [
+            "application/json"
+          ],
+          "parameters": [
+            {
+              "name": "task",
+              "in": "body",
+              "description": "the planning task",
+              "schema": {
+                "$ref": "#/definitions/PlanningTask"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "resulting plan",
+              "schema": {
+                "$ref": "#/definitions/PlanningResultMultiple"
+              }
+            },
+            "default": {
+              "description": "unexpected error",
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "/planners/topk/kstar-topk": {
+        "post": {
+          "description": "Executes kstar-topk on a planning task and returns resulting plan",
+          "operationId": "kstar-topk",
+          "consumes": [
+            "application/json"
+          ],
+          "parameters": [
+            {
+              "name": "task",
+              "in": "body",
+              "description": "the planning task",
+              "schema": {
+                "$ref": "#/definitions/PlanningTask"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "resulting plan",
+              "schema": {
+                "$ref": "#/definitions/PlanningResultMultiple"
+              }
+            },
+            "default": {
+              "description": "unexpected error",
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "/planners/topk": {
+        "post": {
+          "description": "Executes topk on a planning task and returns resulting plan",
+          "operationId": "topk",
+          "consumes": [
+            "application/json"
+          ],
+          "parameters": [
+            {
+              "name": "task",
+              "in": "body",
+              "description": "the planning task",
+              "schema": {
+                "$ref": "#/definitions/PlanningTask"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "resulting plan",
+              "schema": {
+                "$ref": "#/definitions/PlanningResultMultiple"
+              }
+            },
+            "default": {
+              "description": "unexpected error",
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "/planners/diverse/iterative-diverse": {
+        "post": {
+          "description": "Executes iterative-diverse on a planning task and returns resulting plan",
+          "operationId": "iterative-diverse",
+          "consumes": [
+            "application/json"
+          ],
+          "parameters": [
+            {
+              "name": "task",
+              "in": "body",
+              "description": "the planning task",
+              "schema": {
+                "$ref": "#/definitions/PlanningTask"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "resulting plan",
+              "schema": {
+                "$ref": "#/definitions/PlanningResultMultiple"
+              }
+            },
+            "default": {
+              "description": "unexpected error",
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "/planners/diverse": {
+        "post": {
+          "description": "Executes diverse on a planning task and returns resulting plan",
+          "operationId": "diverse",
+          "consumes": [
+            "application/json"
+          ],
+          "parameters": [
+            {
+              "name": "task",
+              "in": "body",
+              "description": "the planning task",
+              "schema": {
+                "$ref": "#/definitions/PlanningTask"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "resulting plan",
+              "schema": {
+                "$ref": "#/definitions/PlanningResultMultiple"
+              }
+            },
+            "default": {
+              "description": "unexpected error",
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "/planners/topq/iterative-unordered-topq": {
+        "post": {
+          "description": "Executes iterative-unordered-topq on a planning task and returns resulting plan",
+          "operationId": "iterative-unordered-topq",
+          "consumes": [
+            "application/json"
+          ],
+          "parameters": [
+            {
+              "name": "task",
+              "in": "body",
+              "description": "the planning task",
+              "schema": {
+                "$ref": "#/definitions/PlanningTask"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "resulting plan",
+              "schema": {
+                "$ref": "#/definitions/PlanningResultMultiple"
+              }
+            },
+            "default": {
+              "description": "unexpected error",
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "/planners/topq/kstar-topq": {
+        "post": {
+          "description": "Executes kstar-topq on a planning task and returns resulting plan",
+          "operationId": "kstar-topq",
+          "consumes": [
+            "application/json"
+          ],
+          "parameters": [
+            {
+              "name": "task",
+              "in": "body",
+              "description": "the planning task",
+              "schema": {
+                "$ref": "#/definitions/PlanningTask"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "resulting plan",
+              "schema": {
+                "$ref": "#/definitions/PlanningResultMultiple"
+              }
+            },
+            "default": {
+              "description": "unexpected error",
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "/planners/topq": {
+        "post": {
+          "description": "Executes topq on a planning task and returns resulting plan",
+          "operationId": "topq",
+          "consumes": [
+            "application/json"
+          ],
+          "parameters": [
+            {
+              "name": "task",
+              "in": "body",
+              "description": "the planning task",
+              "schema": {
+                "$ref": "#/definitions/PlanningTask"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "resulting plan",
+              "schema": {
+                "$ref": "#/definitions/PlanningResultMultiple"
+              }
+            },
+            "default": {
+              "description": "unexpected error",
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "/planners/task": {
+        "post": {
+          "description": "Executes all available categories of planners on a planning task and returns resulting plan",
+          "operationId": "allplanners",
+          "consumes": [
+            "application/json"
+          ],
+          "parameters": [
+            {
+              "name": "task",
+              "in": "body",
+              "description": "the planning task",
+              "schema": {
+                "$ref": "#/definitions/PlanningTask"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "resulting plans",
+              "schema": {
+                "$ref": "#/definitions/AllPlannersResult"
+              }
+            },
+            "default": {
+              "description": "unexpected error",
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+}
