@@ -1,0 +1,215 @@
+FROM ubuntu:18.04 as builder
+
+RUN apt-get update && \
+    apt-get install -y locales jq vim wget curl gawk \
+    cmake g++ g++-multilib make python python-dev python-pip
+
+# Install basic dev tools
+RUN pip install --upgrade pip
+RUN pip install h5py keras numpy pillow scipy tensorflow-cpu subprocess32
+
+# Set up environment variables
+RUN locale-gen en_US.UTF-8
+ENV LANG=en_US.UTF-8 \ 
+	CXX=g++ \
+	HOME=/app \
+	BASE_DIR=/app/planners
+
+# Create required directories
+RUN mkdir -p $HOME && mkdir -p $BASE_DIR
+WORKDIR $BASE_DIR
+
+#################################
+# Download and Install Delfi IPC2018 version
+#################################
+ENV DL_URL=https://bitbucket.org/ipc2018-classical/team23/get/ipc-2018-seq-opt.tar.gz
+RUN curl -SL $DL_URL | tar -xz \
+	&& mv ipc2018-classical-team23* delfi \
+	&& cd delfi \
+    && sed -i 's/-Werror//g' src/cmake_modules/FastDownwardMacros.cmake  \
+	&& python ./build.py release64 \
+    && cd symba \
+    && sed -i 's/-Werror//g' src/search/Makefile \
+    && ./build 
+
+#################################
+# Download and Install Cerberus, post-IPC2018 version
+#################################
+ENV RB_URL=https://github.com/ctpelok77/fd-red-black-postipc2018/archive/master.tar.gz
+RUN curl -SL $RB_URL | tar -xz \
+	&& mv fd-red-black-postipc2018* cerberus \
+	&& cd cerberus \
+	&& python ./build.py -j 2
+
+#################################
+# Download and Install ForbidIterative
+#################################
+ENV FI_URL=https://zenodo.org/record/3246774/files/ForbidIterative.tar.gz
+RUN curl -SL $FI_URL | tar -xz \
+        && mv ForbidIterative forbiditerative \
+	&& cd forbiditerative \
+    && sed -i 's/-Werror//g' src/cmake_modules/FastDownwardMacros.cmake  \
+	&& python ./build.py release64 
+
+ENV DS_URL=https://zenodo.org/record/3404122/files/DiverseScore.tar.gz
+RUN mkdir diversescore && cd diversescore \
+    && curl -SL $DS_URL | tar -xz \
+	&& python ./build.py 
+
+#################################
+# Download and Install K*
+#################################
+ENV KSTAR_URL=https://github.com/ctpelok77/kstar/archive/master.tar.gz
+RUN curl -SL $KSTAR_URL | tar -xz \
+        && mv kstar-* kstar \
+	&& cd kstar \
+	&& python ./build.py release64 
+
+###############################################################################
+## Second stage: the image to run the planners
+## 
+## This is the image that will be distributed, we will simply copy here
+## the files that we fetched and compiled in the previous image and that 
+## are strictly necessary to run the planners.
+## Also, installing nodejs here.
+###############################################################################
+
+FROM ubuntu:18.04
+
+# Install any package needed to *run* the planner
+# RUN apt-get update && apt-get install --no-install-recommends -y \
+#     python python-setuptools python-pip \
+#     && rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update && \
+    apt-get install -y locales curl \
+    # cmake g++ g++-multilib make \
+    python python-dev python-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up environment variables
+RUN locale-gen en_US.UTF-8
+ENV LANG=en_US.UTF-8 \ 
+	CXX=g++ \
+	HOME=/app \
+	BASE_DIR=/app/planners
+
+# Create required directories
+RUN mkdir -p $HOME && mkdir -p $BASE_DIR
+WORKDIR $BASE_DIR
+
+
+# Install basic dev tools
+RUN pip install --upgrade pip
+RUN pip install h5py keras numpy pillow scipy tensorflow-cpu subprocess32
+
+## Copying Delfi planner essential files
+WORKDIR ${BASE_DIR}/delfi/
+COPY --from=builder ${BASE_DIR}/delfi/dl_model ./dl_model
+COPY --from=builder ${BASE_DIR}/delfi/plan-ipc.py .
+COPY --from=builder ${BASE_DIR}/delfi/fast-downward.py .
+COPY --from=builder ${BASE_DIR}/delfi/builds/release64/bin/ ./builds/release64/bin/
+COPY --from=builder ${BASE_DIR}/delfi/driver ./driver
+COPY --from=builder ${BASE_DIR}/delfi/symba/src/preprocess/preprocess ./symba/src/preprocess/preprocess
+COPY --from=builder ${BASE_DIR}/delfi/symba/src/search/downward ./symba/src/search/downward
+COPY --from=builder ${BASE_DIR}/delfi/symba/src/search/downward-1 ./symba/src/search/downward-1
+COPY --from=builder ${BASE_DIR}/delfi/symba/src/search/downward-2 ./symba/src/search/downward-2
+COPY --from=builder ${BASE_DIR}/delfi/symba/src/search/downward-4 ./symba/src/search/downward-4
+## Creating a run script for Delfi
+RUN echo '#!/bin/bash' > $BASE_DIR/delfi/plan-delfi.sh
+RUN echo 'LOG_FILE=run.log' >> $BASE_DIR/delfi/plan-delfi.sh
+RUN echo 'SOURCE="$( dirname "${BASH_SOURCE[0]}" )"' >> $BASE_DIR/delfi/plan-delfi.sh
+RUN echo '$SOURCE/plan-ipc.py --image-from-lifted-task $1 $2 $3 > $LOG_FILE' >> $BASE_DIR/delfi/plan-delfi.sh
+RUN echo '$SOURCE/../plans_to_json.py --domain $1 --problem $2 --plans-folder . --plan-file $3 --json-file $4' >> $BASE_DIR/delfi/plan-delfi.sh
+RUN chmod 755 $BASE_DIR/delfi/plan-delfi.sh
+RUN echo 'alias delfi="python ${BASE_DIR}/delfi/plan-ipc.py --image-from-lifted-task"' >> ~/.bashrc
+
+
+## Copying Cerberus planner essential files
+WORKDIR ${BASE_DIR}/cerberus/
+COPY --from=builder ${BASE_DIR}/cerberus/fast-downward.py .
+COPY --from=builder ${BASE_DIR}/cerberus/builds/release/bin/ ./builds/release/bin/
+COPY --from=builder ${BASE_DIR}/cerberus/driver ./driver
+## Creating run scripts for Cerberus
+RUN echo '#!/bin/bash' > $BASE_DIR/cerberus/plan-sat.sh
+RUN echo 'LOG_FILE=run.log' >> $BASE_DIR/cerberus/plan-sat.sh
+RUN echo 'SOURCE="$( dirname "${BASH_SOURCE[0]}" )"' >> $BASE_DIR/cerberus/plan-sat.sh
+RUN echo '$SOURCE/plan-sat.py $1 $2 $3 > $LOG_FILE' >> $BASE_DIR/cerberus/plan-sat.sh
+RUN echo '$SOURCE/../plans_to_json.py --domain $1 --problem $2 --plans-folder . --plan-file $3 --json-file $4' >> $BASE_DIR/cerberus/plan-sat.sh
+RUN chmod 755 $BASE_DIR/cerberus/plan-sat.sh
+RUN echo 'alias cerberus-sat="python ${BASE_DIR}/cerberus/plan-sat.py"' >> ~/.bashrc
+
+RUN echo '#!/bin/bash' > $BASE_DIR/cerberus/plan-agl.sh
+RUN echo 'LOG_FILE=run.log' >> $BASE_DIR/cerberus/plan-agl.sh
+RUN echo 'SOURCE="$( dirname "${BASH_SOURCE[0]}" )"' >> $BASE_DIR/cerberus/plan-agl.sh
+RUN echo '$SOURCE/plan-agl.py $1 $2 $3 > $LOG_FILE' >> $BASE_DIR/cerberus/plan-agl.sh
+RUN echo '$SOURCE/../plans_to_json.py --domain $1 --problem $2 --plans-folder . --plan-file $3 --json-file $4' >> $BASE_DIR/cerberus/plan-agl.sh
+RUN chmod 755 $BASE_DIR/cerberus/plan-agl.sh
+RUN echo 'alias cerberus-agl="python ${BASE_DIR}/cerberus/plan-agl.py"' >> ~/.bashrc
+
+
+## Copying ForbidIterative planner essential files
+WORKDIR ${BASE_DIR}/diversescore/
+COPY --from=builder ${BASE_DIR}/diversescore/fast-downward.py .
+COPY --from=builder ${BASE_DIR}/diversescore/builds/release/bin/ ./builds/release/bin/
+COPY --from=builder ${BASE_DIR}/diversescore/driver ./driver
+WORKDIR ${BASE_DIR}/forbiditerative/
+COPY --from=builder ${BASE_DIR}/forbiditerative/fast-downward.py .
+COPY --from=builder ${BASE_DIR}/forbiditerative/builds/release64/bin/ ./builds/release64/bin/
+COPY --from=builder ${BASE_DIR}/forbiditerative/driver ./driver
+COPY --from=builder ${BASE_DIR}/forbiditerative/copy_plans.py .
+COPY --from=builder ${BASE_DIR}/forbiditerative/plan.py .
+COPY --from=builder ${BASE_DIR}/forbiditerative/planner_call.py .
+COPY --from=builder ${BASE_DIR}/forbiditerative/timers.py .
+COPY --from=builder ${BASE_DIR}/forbiditerative/iterative ./iterative
+COPY --from=builder ${BASE_DIR}/forbiditerative/plan_topk.sh .
+COPY --from=builder ${BASE_DIR}/forbiditerative/plan_topq.sh .
+COPY --from=builder ${BASE_DIR}/forbiditerative/plan_topk_q.sh .
+COPY --from=builder ${BASE_DIR}/forbiditerative/plan_diverse_agl.sh .
+COPY --from=builder ${BASE_DIR}/forbiditerative/plan_diverse_sat.sh .
+COPY --from=builder ${BASE_DIR}/forbiditerative/plan_diverse_bounded.sh .
+RUN echo 'alias fi-topk="python ${BASE_DIR}/forbiditerative/plan_topk.sh"' >> ~/.bashrc
+RUN echo 'alias fi-topq="python ${BASE_DIR}/forbiditerative/plan_unordered_topq.sh"' >> ~/.bashrc
+RUN echo 'alias fi-diverse="python ${BASE_DIR}/forbiditerative/plan_diverse_sat.sh"' >> ~/.bashrc
+ENV DIVERSE_FAST_DOWNWARD_PLANNER_PATH=${BASE_DIR}/cerberus
+ENV DIVERSE_SCORE_COMPUTATION_PATH=${BASE_DIR}/diversescore
+
+
+## Copying K* planner essential files
+WORKDIR ${BASE_DIR}/kstar/
+COPY --from=builder ${BASE_DIR}/kstar/fast-downward.py .
+COPY --from=builder ${BASE_DIR}/kstar/builds/release64/bin/ ./builds/release64/bin/
+COPY --from=builder ${BASE_DIR}/kstar/driver ./driver
+RUN echo 'alias kstar="python ${BASE_DIR}/kstar/fast-downward.py --build release64"' >> ~/.bashrc
+
+
+## For all planners
+COPY utils/plans_to_json.py $BASE_DIR/
+
+#################################
+# Setup NodeJS and application dependencies
+#################################
+RUN curl -sL https://deb.nodesource.com/setup_12.x | bash && apt-get install -y nodejs build-essential
+
+COPY package.json  $HOME/
+
+WORKDIR $HOME
+RUN npm install
+ENV BLUEBIRD_DEBUG=1
+ENV DEBUG=*
+EXPOSE 4501
+
+#################################
+# Copy NodeJS service
+#################################
+RUN mkdir $HOME/samples
+COPY samples/domain1.pddl $HOME/samples/
+COPY samples/problem1.pddl $HOME/samples/
+COPY config $HOME/config
+COPY storage $HOME/storage
+COPY apibase.masterppp.json $HOME/
+COPY conf.js $HOME/
+COPY app.masterppp.common.js $HOME/
+COPY app.masterppp.joint.js $HOME/
+
+CMD ["npm", "start"]
