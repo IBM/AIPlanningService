@@ -110,6 +110,8 @@ COPY --from=builder ${BASE_DIR}/delfi/plan-ipc.py .
 COPY --from=builder ${BASE_DIR}/delfi/fast-downward.py .
 COPY --from=builder ${BASE_DIR}/delfi/builds/release64/bin/ ./builds/release64/bin/
 COPY --from=builder ${BASE_DIR}/delfi/driver ./driver
+COPY --from=builder ${BASE_DIR}/delfi/create-image-from-graph.py .
+COPY --from=builder ${BASE_DIR}/delfi/timers.py .
 COPY --from=builder ${BASE_DIR}/delfi/symba/src/preprocess/preprocess ./symba/src/preprocess/preprocess
 COPY --from=builder ${BASE_DIR}/delfi/symba/src/search/downward ./symba/src/search/downward
 COPY --from=builder ${BASE_DIR}/delfi/symba/src/search/downward-1 ./symba/src/search/downward-1
@@ -123,6 +125,8 @@ RUN echo '$SOURCE/plan-ipc.py --image-from-lifted-task $1 $2 $3 > $LOG_FILE' >> 
 RUN echo '$SOURCE/../plans_to_json.py --domain $1 --problem $2 --plans-folder . --plan-file $3 --json-file $4' >> $BASE_DIR/delfi/plan-delfi.sh
 RUN chmod 755 $BASE_DIR/delfi/plan-delfi.sh
 RUN echo 'alias delfi="python ${BASE_DIR}/delfi/plan-ipc.py --image-from-lifted-task"' >> ~/.bashrc
+## Modifying ${BASE_DIR}/delfi/plan-ipc.py to point to a correct location of abstract_structure_module
+RUN sed -i 's#src#builds/release64/bin#g' ${BASE_DIR}/delfi/plan-ipc.py
 
 
 ## Copying Cerberus planner essential files
@@ -130,6 +134,8 @@ WORKDIR ${BASE_DIR}/cerberus/
 COPY --from=builder ${BASE_DIR}/cerberus/fast-downward.py .
 COPY --from=builder ${BASE_DIR}/cerberus/builds/release/bin/ ./builds/release/bin/
 COPY --from=builder ${BASE_DIR}/cerberus/driver ./driver
+COPY --from=builder ${BASE_DIR}/cerberus/plan-sat.py .
+COPY --from=builder ${BASE_DIR}/cerberus/plan-agl.py .
 ## Creating run scripts for Cerberus
 RUN echo '#!/bin/bash' > $BASE_DIR/cerberus/plan-sat.sh
 RUN echo 'LOG_FILE=run.log' >> $BASE_DIR/cerberus/plan-sat.sh
@@ -138,7 +144,7 @@ RUN echo '$SOURCE/plan-sat.py $1 $2 $3 > $LOG_FILE' >> $BASE_DIR/cerberus/plan-s
 RUN echo '$SOURCE/../plans_to_json.py --domain $1 --problem $2 --plans-folder . --plan-file $3 --json-file $4' >> $BASE_DIR/cerberus/plan-sat.sh
 RUN chmod 755 $BASE_DIR/cerberus/plan-sat.sh
 RUN echo 'alias cerberus-sat="python ${BASE_DIR}/cerberus/plan-sat.py"' >> ~/.bashrc
-
+## Creating run scripts for Cerberus
 RUN echo '#!/bin/bash' > $BASE_DIR/cerberus/plan-agl.sh
 RUN echo 'LOG_FILE=run.log' >> $BASE_DIR/cerberus/plan-agl.sh
 RUN echo 'SOURCE="$( dirname "${BASH_SOURCE[0]}" )"' >> $BASE_DIR/cerberus/plan-agl.sh
@@ -165,11 +171,13 @@ COPY --from=builder ${BASE_DIR}/forbiditerative/iterative ./iterative
 COPY --from=builder ${BASE_DIR}/forbiditerative/plan_topk.sh .
 COPY --from=builder ${BASE_DIR}/forbiditerative/plan_topq.sh .
 COPY --from=builder ${BASE_DIR}/forbiditerative/plan_topk_q.sh .
+# COPY --from=builder ${BASE_DIR}/forbiditerative/plan_unordered_topq.sh .
 COPY --from=builder ${BASE_DIR}/forbiditerative/plan_diverse_agl.sh .
 COPY --from=builder ${BASE_DIR}/forbiditerative/plan_diverse_sat.sh .
 COPY --from=builder ${BASE_DIR}/forbiditerative/plan_diverse_bounded.sh .
 RUN echo 'alias fi-topk="python ${BASE_DIR}/forbiditerative/plan_topk.sh"' >> ~/.bashrc
-RUN echo 'alias fi-topq="python ${BASE_DIR}/forbiditerative/plan_unordered_topq.sh"' >> ~/.bashrc
+# RUN echo 'alias fi-topq="python ${BASE_DIR}/forbiditerative/plan_unordered_topq.sh"' >> ~/.bashrc
+RUN echo 'alias fi-topq="python ${BASE_DIR}/forbiditerative/plan_topq.sh"' >> ~/.bashrc
 RUN echo 'alias fi-diverse="python ${BASE_DIR}/forbiditerative/plan_diverse_sat.sh"' >> ~/.bashrc
 ENV DIVERSE_FAST_DOWNWARD_PLANNER_PATH=${BASE_DIR}/cerberus
 ENV DIVERSE_SCORE_COMPUTATION_PATH=${BASE_DIR}/diversescore
@@ -180,8 +188,9 @@ WORKDIR ${BASE_DIR}/kstar/
 COPY --from=builder ${BASE_DIR}/kstar/fast-downward.py .
 COPY --from=builder ${BASE_DIR}/kstar/builds/release64/bin/ ./builds/release64/bin/
 COPY --from=builder ${BASE_DIR}/kstar/driver ./driver
+COPY --from=builder ${BASE_DIR}/kstar/plan_topk.sh .
+COPY --from=builder ${BASE_DIR}/kstar/plan_topq.sh .
 RUN echo 'alias kstar="python ${BASE_DIR}/kstar/fast-downward.py --build release64"' >> ~/.bashrc
-
 
 ## For all planners
 COPY utils/plans_to_json.py $BASE_DIR/
