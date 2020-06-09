@@ -346,6 +346,7 @@ module.exports.setUpWorkerPlanners = function(plannersConfig, apibase, app, logg
         apibase.paths['/planners/' + categ] = this.getOpenAPIDescription(categ);
         app.post('/planners/' + categ, this.plannerSelector(categ, plannersConfig[categ], logger))
     }
+    app.get('/alive', (req, res) => { res.status(200).send('I\'m alive!'); });
 };
 
 module.exports.taskDescription = {
