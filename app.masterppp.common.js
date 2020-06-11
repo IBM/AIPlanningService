@@ -14,8 +14,11 @@ var archiver = require('archiver-promise');
 var Sugar = require('sugar');
 const log4js = require("log4js");
 var timeout = require('connect-timeout')
+var jszip = require('jszip');
+var multer = require('multer');
 
 log4js.configure(nconf.get("logging"));
+var upload = multer({dest: 'uploads/'});
 
 module.exports.coreApiBase = function() {
     let dom = fs.readFileSync('samples/domain1.pddl', 'utf-8');
@@ -85,7 +88,11 @@ function runAndCatch(command, timeout) {
     });
 }
 
-function runPlanner(pname, pconfig, domain, problem, dontstore, numplans, qualitybound, logger) {
+function runPlanner(pname, pconfig, task, logger) {
+    let domain = task.domain;
+    let problem = task.problem; 
+    let numplans = task.numplans;
+    let qualitybound = task.qualitybound;
     var p_tmpFiles = [
         tmp.tmpName({ template: '/tmp/domain-XXXXXX' }),
         tmp.tmpName({ template: '/tmp/problem-XXXXXX' }),
@@ -116,7 +123,7 @@ function runPlanner(pname, pconfig, domain, problem, dontstore, numplans, qualit
                         retObj.planner = pname;
                         retObj.length = _.isArray(retObj.actions) ? retObj.actions.length : NaN;
                         retObj.parse_status = 'ok';
-                        if (dontstore || _.isUndefined(storage_opt) || _.isUndefined(storage_opt.type)) {
+                        if (task.dontstore || _.isUndefined(storage_opt) || _.isUndefined(storage_opt.type)) {
                             logger.info("Sending response for " + pname + ":\n" + JSON.stringify(retObj, null, 2));
                             logger.info("-----------------------------------------------------------------------------");
                             return Promise.resolve({
@@ -167,27 +174,114 @@ function runPlanner(pname, pconfig, domain, problem, dontstore, numplans, qualit
         });
 }
 
+function extractBaseTask(req, res) {
+    if (!req.body.domain) {
+        res.status(400).send("No domain specified");
+        return undefined;
+    }
+    if (!req.body.problem) {
+        res.status(400).send("No problem specified");
+        return undefined;
+    }
+    let numplans = parseInt(req.body.numplans) || 5;
+    let qualitybound = parseFloat(req.body.qualitybound) || 1.0;
+    let task = {
+        domain: req.body.domain,
+        problem: req.body.problem,
+        dontstore: req.query.dontstore,
+        numplans: numplans,
+        qualitybound: qualitybound
+    };
+    return task;
+}
+
+function extractZippedTask(req, res, logger) {
+    // there should be req.file containing the zip archive
+    return fs.promises.readFile(req.file.path).then(buf => {
+        return jszip.loadAsync(buf).then(zipObj => {
+            let f = zipObj.file('task.json');
+            if(f) {
+                return tmp.tmpName({ template: '/tmp/task-XXXXXX.json' }).then(fname => {
+                    logger.debug("Will write the file to " + fname);
+                    return new Promise((resolve, reject) => {
+                        f.nodeStream().pipe(fs.createWriteStream(fname)).on('finish', () => {
+                            logger.debug("JSON dumped, about to read " + fname);
+                            fs.promises.readFile(fname, 'utf-8').then(content => {
+                                resolve(JSON.parse(content));
+                            }).catch(reject);
+                        });
+                    });    
+                });
+            } else { 
+                res.status(400).send('Cannot find task.json inside the zipped contents.');
+                return undefined;
+            }
+        });
+    }).catch(e => {
+        logger.error("Error extracting zip task: " + e);
+        console.log("STACK:" + e.stack);
+        res.status(400).send('Failed to parse the zip archive');
+        return undefined;
+    });
+}
+
+function processBaseOutput(res, ret, logger) {
+    if (ret.obj) {
+        logger.info("Returning from planner " + JSON.stringify(ret.obj, null, 2));
+        res.status(ret.code).json(ret.obj);
+    } else if (ret.msg) {
+        logger.error("Planner failed with code " + ret.code + " and message " + ret.msg);
+        res.status(ret.code).send(ret.msg);
+    } else {
+        logger.error("Planner failed with unknown error");
+        res.status(500).send('Error');
+    }
+}
+
+function processZippedOutput(res, ret, logger) {
+    if (ret.obj) {
+        logger.info("Returning from planner " + JSON.stringify(ret.obj, null, 2));
+        tmp.tmpName({ template: '/tmp/result-XXXXXX.zip' }).then(fname => {
+            var archive = archiver(fname);
+            archive.append(JSON.stringify(ret.obj, null, 2), {name: 'result.json'});
+            archive.finalize().then( () => {
+                res.status(ret.code).sendFile(fname);
+            });
+        });
+    } else if (ret.msg) {
+        logger.error("Planner failed with code " + ret.code + " and message " + ret.msg);
+        res.status(ret.code).send(ret.msg);
+    } else {
+        logger.error("Planner failed with unknown error");
+        res.status(500).send('Error');
+    }
+}
+
 module.exports.plannerInvocation = function(pname, pconfig, logger) {
     return (req, res) => {
         logger.info('Received request for ' + pname);
-        if (!req.body.domain) {
-            res.status(400).send("No domain specified");
-            return;
-        }
-        if (!req.body.problem) {
-            res.status(400).send("No problem specified");
-            return;
-        }
-        let numplans = parseInt(req.body.numplans) || 5;
-        let qualitybound = parseFloat(req.body.qualitybound) || 1.0
-        runPlanner(pname, pconfig, req.body.domain, req.body.problem, req.query.dontstore, numplans, qualitybound, logger).then(ret => {
-            if (ret.obj) {
-                res.status(ret.code).json(ret.obj);
-            } else if (ret.msg) {
-                res.status(ret.code).send(ret.msg);
-            } else {
+        let task = extractBaseTask(req, res);
+        if(!task) { return } // already returned an error
+        runPlanner(pname, pconfig, task, logger).then(ret => {
+            processBaseOutput(res, ret, logger);
+        }).catch(e => {
+            logger.error(e);
+            res.status(500).send('Error');
+        });
+    };
+};
+
+module.exports.plannerInvocationZipped = function(pname, pconfig, logger) {
+    return (req, res) => {
+        logger.info('Received request for ' + pname);
+        extractZippedTask(req, res, logger).then(task => {
+            if(!task) { return; } // already returned an error
+            runPlanner(pname, pconfig, task, logger).then(ret => {
+                processZippedOutput(res, ret, logger);
+            }).catch(e => {
+                logger.error(e);
                 res.status(500).send('Error');
-            }
+            });
         });
     };
 };
@@ -206,7 +300,7 @@ module.exports.plannerSelectorPromise = function(categ, categObj, logger, planne
                 plannerKey = allplanners[0];
             }
         }
-        return runPlanner(plannerKey, categObj.planners[plannerKey], task.domain, task.problem, task.dontstore, task.numplans, task.qualitybound, logger);
+        return runPlanner(plannerKey, categObj.planners[plannerKey], task, logger);
     }
 
     var p_tmpFiles = [
@@ -233,11 +327,7 @@ module.exports.plannerSelectorPromise = function(categ, categObj, logger, planne
                         plannerPromises.add(
                             runPlanner(pname,
                                 categObj.planners[pname],
-                                task.domain,
-                                task.problem,
-                                task.dontstore,
-                                task.numplans,
-                                task.qualitybound,
+                                task,
                                 logger
                             )
                         );
@@ -252,38 +342,28 @@ module.exports.plannerSelectorPromise = function(categ, categObj, logger, planne
 module.exports.plannerSelector = function(categ, categObj, logger, plannersConfig) {
     const promiseFunc = this.plannerSelectorPromise;
     return function(req, res) {
-        if (!req.body.domain) {
-            res.status(400).send("No domain specified");
-            return;
-        }
-        if (!req.body.problem) {
-            res.status(400).send("No problem specified");
-            return;
-        }
-        let numplans = parseInt(req.body.numplans) || 5;
-        let qualitybound = parseFloat(req.body.qualitybound) || 1.0
-
-        let task = {
-            domain: req.body.domain,
-            problem: req.body.problem,
-            dontstore: req.query.dontstore || false,
-            numplans: numplans,
-            qualitybound : qualitybound
-        };
+        let task = extractBaseTask(req, res);
+        if(!task) { return; } // already returned an error
         promiseFunc(categ, categObj, logger, plannersConfig, task).then(ret => {
-            if (ret.obj) {
-                logger.info("Returning from planner " + JSON.stringify(ret.obj, null, 2));
-                res.status(ret.code).json(ret.obj);
-            } else if (ret.msg) {
-                logger.error("Planner failed with code " + ret.code + " and message " + ret.msg);
-                res.status(ret.code).send(ret.msg);
-            } else {
-                logger.error("Planner failed with unknown error");
-                res.status(500).send('Error');
-            }
+            processBaseOutput(res, ret, logger);
         }).catch(e => {
             logger.error("Error " + e);
             res.status(500).send(e);
+        });
+    };
+};
+
+module.exports.plannerSelectorZipped = function(categ, categObj, logger, plannersConfig) {
+    const promiseFunc = this.plannerSelectorPromise;
+    return function(req, res) {
+        extractZippedTask(req, res, logger).then(() => {
+            if(!task) { return; } // already returned an error
+            promiseFunc(categ, categObj, logger, plannersConfig, task).then(ret => {
+                processZippedOutput(res, ret, logger);
+            }).catch(e => {
+                logger.error("Error " + e);
+                res.status(500).send(e);
+            });    
         });
     };
 };
@@ -342,9 +422,11 @@ module.exports.setUpWorkerPlanners = function(plannersConfig, apibase, app, logg
             let thisPlannerFunc = this.plannerInvocation(pc, plannersConfig[categ].planners[pc], logger);
             apibase.paths["/planners/" + categ + "/" + pc] = this.getOpenAPIDescription(pc);
             app.post('/planners/' + categ + "/" + pc, thisPlannerFunc);
+            app.post('/planners/' + categ + '/' + pc + '/zip', upload.single('task'), this.plannerInvocationZipped(pc, plannersConfig[categ].planners[pc], logger));
         }
         apibase.paths['/planners/' + categ] = this.getOpenAPIDescription(categ);
-        app.post('/planners/' + categ, this.plannerSelector(categ, plannersConfig[categ], logger))
+        app.post('/planners/' + categ, this.plannerSelector(categ, plannersConfig[categ], logger));
+        app.post('/planners/' + categ + '/zip', upload.single('task'), this.plannerSelectorZipped(categ, plannersConfig[categ], logger));
     }
     app.get('/alive', (req, res) => { res.status(200).send('I\'m alive!'); });
 };

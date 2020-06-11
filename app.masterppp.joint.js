@@ -2,7 +2,7 @@ const mppCommon = require('./app.masterppp.common');
 const _ = require('lodash');
 
 var apibase = mppCommon.coreApiBase();
-const logger = mppCommon.getLogger("worker");
+const logger = mppCommon.getLogger("default");
 var app = mppCommon.setUpExpress(logger);
 var plannersConfig = mppCommon.getEnabledCategories(logger);
 
