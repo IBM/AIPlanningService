@@ -82,7 +82,7 @@ FROM ubuntu:18.04
 #     && rm -rf /var/lib/apt/lists/*
 
 RUN apt-get update && \
-    apt-get install -y locales curl \
+    apt-get install -y locales curl gawk \
     # cmake g++ g++-multilib make \
     python python-dev python-pip \
     && rm -rf /var/lib/apt/lists/*
@@ -117,6 +117,12 @@ COPY --from=builder ${BASE_DIR}/delfi/symba/src/search/downward ./symba/src/sear
 COPY --from=builder ${BASE_DIR}/delfi/symba/src/search/downward-1 ./symba/src/search/downward-1
 COPY --from=builder ${BASE_DIR}/delfi/symba/src/search/downward-2 ./symba/src/search/downward-2
 COPY --from=builder ${BASE_DIR}/delfi/symba/src/search/downward-4 ./symba/src/search/downward-4
+COPY --from=builder ${BASE_DIR}/delfi/symba/src/search/dispatch ./symba/src/search/dispatch
+COPY --from=builder ${BASE_DIR}/delfi/symba/src/search/unitcost ./symba/src/search/unitcost
+COPY --from=builder ${BASE_DIR}/delfi/symba/src/translate ./symba/src/translate
+COPY --from=builder ${BASE_DIR}/delfi/symba.py .
+COPY --from=builder ${BASE_DIR}/delfi/symba/src/plan ./symba/src/plan
+COPY --from=builder ${BASE_DIR}/delfi/symba/src/plan-ipc ./symba/src/plan-ipc
 ## Creating a run script for Delfi
 RUN echo '#!/bin/bash' > $BASE_DIR/delfi/plan-delfi.sh
 RUN echo 'LOG_FILE=run.log' >> $BASE_DIR/delfi/plan-delfi.sh

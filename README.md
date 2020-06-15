@@ -7,7 +7,7 @@ The repository contains a docker configuration file and code that allow fetching
 4. K* based top-k planner
 
 ## Build and run the service
-* Build via ```docker build -t <YOUR_IMAGE_TAG> .```
+* Two-stage build via ```docker build -t <YOUR_IMAGE_TAG> -f Dockerfile.twostage .```
 * Run the service locally via ```docker run -d -p 4501:4501 --env server__hostname=`hostname`:4501 --name <YOUR_CONTAINER_NAME> <YOUR_IMAGE_TAG>```. A couple of notes:
     * This will make the service available on your local machine on port 4501. See the Docker User Guide for manipulating port mappings and binding to specific interfaces.
     * The ```--env``` options are only necessary for the swagger UI available at (http://localhost:4501/api-docs) to properly bind to your physical host name and port instead of the container name. If you do not plan to use the swagger UI, you can safely skip it.
