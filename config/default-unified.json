@@ -64,7 +64,7 @@
             "default": "iterative-diverse",
             "planners": {
                 "iterative-diverse": {
-                    "cmd": "plan_diverse_sat.sh <DOMAIN> <PROBLEM> <NUMPLANS> <PLANFILE> <OUTPUT>",
+                    "cmd": "plan_diverse_sat.sh <DOMAIN> <PROBLEM> <NUMPLANS> <OUTPUT>",
                     "basedir": "forbiditerative"
                 }
             }

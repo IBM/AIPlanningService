@@ -47,7 +47,7 @@ RUN curl -SL $RB_URL | tar -xz \
 
 WORKDIR $BASE_DIR/forbiditerative/
 
-ENV BUILD_COMMIT_ID 5ad909e
+ENV BUILD_COMMIT_ID 1751d5e
 # Fetch the code at the right commit ID from the Github repo
 RUN curl -L https://github.com/IBM/forbiditerative/archive/${BUILD_COMMIT_ID}.tar.gz | tar xz --strip=1
 RUN python ./build.py -j4 release64
@@ -196,14 +196,31 @@ COPY --from=builder ${BASE_DIR}/forbiditerative/plan.py .
 COPY --from=builder ${BASE_DIR}/forbiditerative/planner_call.py .
 COPY --from=builder ${BASE_DIR}/forbiditerative/timers.py .
 COPY --from=builder ${BASE_DIR}/forbiditerative/iterative ./iterative
-COPY --from=builder ${BASE_DIR}/forbiditerative/plan_topk.sh .
-COPY --from=builder ${BASE_DIR}/forbiditerative/plan_unordered_topq.sh .
-COPY --from=builder ${BASE_DIR}/forbiditerative/plan_diverse_agl.sh .
-COPY --from=builder ${BASE_DIR}/forbiditerative/plan_diverse_sat.sh .
-COPY --from=builder ${BASE_DIR}/forbiditerative/plan_diverse_bounded.sh .
-RUN echo 'alias fi-topk="python ${BASE_DIR}/forbiditerative/plan_topk.sh"' >> ~/.bashrc
-RUN echo 'alias fi-topq="python ${BASE_DIR}/forbiditerative/plan_unordered_topq.sh"' >> ~/.bashrc
-RUN echo 'alias fi-diverse="python ${BASE_DIR}/forbiditerative/plan_diverse_sat.sh"' >> ~/.bashrc
+# COPY --from=builder ${BASE_DIR}/forbiditerative/plan_topk.sh .
+# COPY --from=builder ${BASE_DIR}/forbiditerative/plan_unordered_topq.sh .
+# COPY --from=builder ${BASE_DIR}/forbiditerative/plan_diverse_agl.sh .
+# COPY --from=builder ${BASE_DIR}/forbiditerative/plan_diverse_sat.sh .
+COPY utils/plan_diverse_sat.sh .
+
+# ## Creating run scripts for diverse
+# RUN echo '#!/bin/bash' > $BASE_DIR/forbiditerative/plan_diverse_sat.sh
+# RUN echo 'LOG_FILE=run.log' >> $BASE_DIR/forbiditerative/plan_diverse_sat.sh
+# RUN echo 'num_plans=$(( 2*$3 ))' >> $BASE_DIR/forbiditerative/plan_diverse_sat.sh
+# RUN echo 'SOURCE="$( dirname "${BASH_SOURCE[0]}" )"' >> $BASE_DIR/forbiditerative/plan_diverse_sat.sh
+# RUN echo '$SOURCE/plan.py --planner diverse --domain $1 --problem $2 --number-of-plans $num_plans --use-local-folder --clean-local-folder > $LOG_FILE' >> $BASE_DIR/forbiditerative/plan_diverse_sat.sh
+# RUN echo 'PLANSDIR=$SOURCE/found_plans' >> $BASE_DIR/forbiditerative/plan_diverse_sat.sh
+# RUN echo 'num_plans=`ls -1q $PLANSDIR/sas_plan.* | wc -l`' >> $BASE_DIR/forbiditerative/plan_diverse_sat.sh
+# RUN echo 'SCORE="subset(compute_stability_metric=true,aggregator_metric=avg,plans_as_multisets=false,plans_subset_size=$3,exact_method=false,dump_plans=true)"' >> $BASE_DIR/forbiditerative/plan_diverse_sat.sh
+# RUN echo 'domain="$(cd "$(dirname "$1")"; pwd)/$(basename "$1")"' >> $BASE_DIR/forbiditerative/plan_diverse_sat.sh
+# RUN echo 'problem="$(cd "$(dirname "$2")"; pwd)/$(basename "$2")"' >> $BASE_DIR/forbiditerative/plan_diverse_sat.sh
+# RUN echo '(mkdir -p $PLANSDIR/done && cd $PLANSDIR/done && $DIVERSE_SCORE_COMPUTATION_PATH/fast-downward.py $domain $problem --diversity-score $SCORE --internal-plan-files-path $PLANSDIR --internal-num-plans-to-read $num_plans) > $LOG_FILE' >> $BASE_DIR/forbiditerative/plan_diverse_sat.sh
+# RUN echo '$SOURCE/../plans_to_json.py --domain $1 --problem $2 --plans-folder $PLANSDIR/done --plan-file $4 --json-file $5 > $LOG_FILE' >> $BASE_DIR/forbiditerative/plan_diverse_sat.sh
+# RUN chmod 755 $BASE_DIR/forbiditerative/plan_diverse_sat.sh
+
+
+# RUN echo 'alias fi-topk="python ${BASE_DIR}/forbiditerative/plan_topk.sh"' >> ~/.bashrc
+# RUN echo 'alias fi-topq="python ${BASE_DIR}/forbiditerative/plan_unordered_topq.sh"' >> ~/.bashrc
+# RUN echo 'alias fi-diverse="python ${BASE_DIR}/forbiditerative/plan_diverse_sat.sh"' >> ~/.bashrc
 ENV DIVERSE_FAST_DOWNWARD_PLANNER_PATH=${BASE_DIR}/cerberus
 ENV DIVERSE_SCORE_COMPUTATION_PATH=${BASE_DIR}/diversescore
 
