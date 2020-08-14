@@ -73,11 +73,15 @@
             "default": "iterative-unordered-topq",
             "planners": {
                 "iterative-unordered-topq": {
-                    "cmd": "plan_unordered_topq.sh <DOMAIN> <PROBLEM> <COSTMULTBOUND> <PLANFILE> <OUTPUT>",
+                    "cmd": "plan.py --planner unordered_topq --domain <DOMAIN> --problem <PROBLEM> --quality-bound <COSTMULTBOUND> --symmetries --use-local-folder --clean-local-folder  --plans-as-json --results-file <OUTPUT>",
                     "basedir": "forbiditerative"
                 },
                 "kstar-topq" : {
                     "cmd": "plan_topq.sh <DOMAIN> <PROBLEM> <COSTMULTBOUND> <NUMPLANS> <OUTPUT>",
+                    "basedir": "kstar"
+                },
+                "kstar-unordered-topq" : {
+                    "cmd": "plan_unordered_topq.sh <DOMAIN> <PROBLEM> <COSTMULTBOUND> <NUMPLANS> <OUTPUT>",
                     "basedir": "kstar"
                 }
             }

@@ -41,7 +41,12 @@
                     "type": "integer",
                     "format": "int32",
                     "description": "for planners returning multiple plans, the requested number of plans"
-                }
+                },
+                "qualitybound": {
+                    "type": "float",
+                    "format": "float32",
+                    "description": "for planners bounding quality, the requested relative bound on plan quality"
+                }                
             }
         }, 
         "PlanningResult": {

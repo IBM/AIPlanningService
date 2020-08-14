@@ -44,26 +44,48 @@ RUN curl -SL $RB_URL | tar -xz \
 #################################
 # Download and Install ForbidIterative
 #################################
-ENV FI_URL=https://zenodo.org/record/3246774/files/ForbidIterative.tar.gz
-RUN curl -SL $FI_URL | tar -xz \
-        && mv ForbidIterative forbiditerative \
-	&& cd forbiditerative \
-    && sed -i 's/-Werror//g' src/cmake_modules/FastDownwardMacros.cmake  \
-	&& python ./build.py release64 
 
-ENV DS_URL=https://zenodo.org/record/3404122/files/DiverseScore.tar.gz
-RUN mkdir diversescore && cd diversescore \
-    && curl -SL $DS_URL | tar -xz \
-	&& python ./build.py 
+WORKDIR $BASE_DIR/forbiditerative/
+
+ENV BUILD_COMMIT_ID 5ad909e
+# Fetch the code at the right commit ID from the Github repo
+RUN curl -L https://github.com/IBM/forbiditerative/archive/${BUILD_COMMIT_ID}.tar.gz | tar xz --strip=1
+RUN python ./build.py -j4 release64
+
+# Strip the main binary to reduce size
+RUN strip --strip-all builds/release64/bin/downward
+
+
+WORKDIR $BASE_DIR/diversescore/
+
+ENV BUILD_COMMIT_ID 8208ae3
+# Fetch the code at the right commit ID from the Github repo
+RUN curl -L https://github.com/IBM/diversescore/archive/${BUILD_COMMIT_ID}.tar.gz | tar xz --strip=1
+# Invoke the build script with appropriate options
+RUN python ./build.py -j4 
+
+# Strip the main binary to reduce size
+RUN strip --strip-all builds/release/bin/downward
+
 
 #################################
 # Download and Install K*
 #################################
-ENV KSTAR_URL=https://github.com/ctpelok77/kstar/archive/master.tar.gz
-RUN curl -SL $KSTAR_URL | tar -xz \
-        && mv kstar-* kstar \
-	&& cd kstar \
-	&& python ./build.py release64 
+WORKDIR $BASE_DIR/kstar/
+
+# ENV KSTAR_URL=https://github.com/ctpelok77/kstar/archive/master.tar.gz
+# RUN curl -SL $KSTAR_URL | tar -xz \
+#         && mv kstar-* kstar \
+# 	&& cd kstar \
+# 	&& python ./build.py release64 
+
+ENV BUILD_COMMIT_ID dc641ce
+# Fetch the code at the right commit ID from the Github repo
+RUN curl -L https://github.com/ctpelok77/kstar/archive/${BUILD_COMMIT_ID}.tar.gz | tar xz --strip=1
+# Invoke the build script with appropriate options
+RUN python ./build.py -j4 release64
+# Strip the main binary to reduce size
+RUN strip --strip-all builds/release64/bin/downward
 
 ###############################################################################
 ## Second stage: the image to run the planners
@@ -175,15 +197,12 @@ COPY --from=builder ${BASE_DIR}/forbiditerative/planner_call.py .
 COPY --from=builder ${BASE_DIR}/forbiditerative/timers.py .
 COPY --from=builder ${BASE_DIR}/forbiditerative/iterative ./iterative
 COPY --from=builder ${BASE_DIR}/forbiditerative/plan_topk.sh .
-COPY --from=builder ${BASE_DIR}/forbiditerative/plan_topq.sh .
-COPY --from=builder ${BASE_DIR}/forbiditerative/plan_topk_q.sh .
-# COPY --from=builder ${BASE_DIR}/forbiditerative/plan_unordered_topq.sh .
+COPY --from=builder ${BASE_DIR}/forbiditerative/plan_unordered_topq.sh .
 COPY --from=builder ${BASE_DIR}/forbiditerative/plan_diverse_agl.sh .
 COPY --from=builder ${BASE_DIR}/forbiditerative/plan_diverse_sat.sh .
 COPY --from=builder ${BASE_DIR}/forbiditerative/plan_diverse_bounded.sh .
 RUN echo 'alias fi-topk="python ${BASE_DIR}/forbiditerative/plan_topk.sh"' >> ~/.bashrc
-# RUN echo 'alias fi-topq="python ${BASE_DIR}/forbiditerative/plan_unordered_topq.sh"' >> ~/.bashrc
-RUN echo 'alias fi-topq="python ${BASE_DIR}/forbiditerative/plan_topq.sh"' >> ~/.bashrc
+RUN echo 'alias fi-topq="python ${BASE_DIR}/forbiditerative/plan_unordered_topq.sh"' >> ~/.bashrc
 RUN echo 'alias fi-diverse="python ${BASE_DIR}/forbiditerative/plan_diverse_sat.sh"' >> ~/.bashrc
 ENV DIVERSE_FAST_DOWNWARD_PLANNER_PATH=${BASE_DIR}/cerberus
 ENV DIVERSE_SCORE_COMPUTATION_PATH=${BASE_DIR}/diversescore
@@ -196,6 +215,7 @@ COPY --from=builder ${BASE_DIR}/kstar/builds/release64/bin/ ./builds/release64/b
 COPY --from=builder ${BASE_DIR}/kstar/driver ./driver
 COPY --from=builder ${BASE_DIR}/kstar/plan_topk.sh .
 COPY --from=builder ${BASE_DIR}/kstar/plan_topq.sh .
+COPY --from=builder ${BASE_DIR}/kstar/plan_unordered_topq.sh .
 RUN echo 'alias kstar="python ${BASE_DIR}/kstar/fast-downward.py --build release64"' >> ~/.bashrc
 
 ## For all planners
