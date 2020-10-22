@@ -13,7 +13,15 @@ RUN locale-gen en_US.UTF-8
 ENV LANG=en_US.UTF-8 \ 
 	CXX=g++ \
 	HOME=/app \
-	BASE_DIR=/app/planners
+	BASE_DIR=/app/planners \
+    DELFI_URL=https://bitbucket.org/ipc2018-classical/team23/get/ipc-2018-seq-opt.tar.gz \
+    RB_BUILD_COMMIT_ID=821fad1 \
+    FI_BUILD_COMMIT_ID=1751d5e \
+    DIV_SC_BUILD_COMMIT_ID=0d2c2e4 \
+    KSTAR_BUILD_COMMIT_ID=d78ec31
+
+
+
 
 # Create required directories
 RUN mkdir -p $HOME && mkdir -p $BASE_DIR
@@ -22,8 +30,7 @@ WORKDIR $BASE_DIR
 #################################
 # Download and Install Delfi IPC2018 version
 #################################
-ENV DL_URL=https://bitbucket.org/ipc2018-classical/team23/get/ipc-2018-seq-opt.tar.gz
-RUN curl -SL $DL_URL | tar -xz \
+RUN curl -SL $DELFI_URL | tar -xz \
 	&& mv ipc2018-classical-team23* delfi \
 	&& cd delfi \
     && sed -i 's/-Werror//g' src/cmake_modules/FastDownwardMacros.cmake  \
@@ -37,54 +44,44 @@ RUN curl -SL $DL_URL | tar -xz \
 #################################
 WORKDIR $BASE_DIR/cerberus/
 
-ENV BUILD_COMMIT_ID 821fad1
 # Fetch the code at the right commit ID from the Github repo
-RUN curl -L https://github.com/ctpelok77/fd-red-black-postipc2018/archive/${BUILD_COMMIT_ID}.tar.gz | tar xz --strip=1
+RUN curl -L https://github.com/ctpelok77/fd-red-black-postipc2018/archive/${RB_BUILD_COMMIT_ID}.tar.gz | tar xz --strip=1 \
 # Invoke the build script with appropriate options
-RUN python ./build.py -j4
+    && python ./build.py -j4 \
 # Strip the main binary to reduce size
-RUN strip --strip-all builds/release/bin/downward
-
+    && strip --strip-all builds/release/bin/downward
 
 #################################
 # Download and Install ForbidIterative
 #################################
 
 WORKDIR $BASE_DIR/forbiditerative/
-
-ENV BUILD_COMMIT_ID 1751d5e
 # Fetch the code at the right commit ID from the Github repo
-RUN curl -L https://github.com/IBM/forbiditerative/archive/${BUILD_COMMIT_ID}.tar.gz | tar xz --strip=1
-RUN python ./build.py -j4 release64
-
+RUN curl -L https://github.com/IBM/forbiditerative/archive/${FI_BUILD_COMMIT_ID}.tar.gz | tar xz --strip=1 \
+    && python ./build.py -j4 release64 \
 # Strip the main binary to reduce size
-RUN strip --strip-all builds/release64/bin/downward
+    && strip --strip-all builds/release64/bin/downward
 
 
 WORKDIR $BASE_DIR/diversescore/
-
-ENV BUILD_COMMIT_ID 8208ae3
 # Fetch the code at the right commit ID from the Github repo
-RUN curl -L https://github.com/IBM/diversescore/archive/${BUILD_COMMIT_ID}.tar.gz | tar xz --strip=1
+RUN curl -L https://github.com/IBM/diversescore/archive/${DIV_SC_BUILD_COMMIT_ID}.tar.gz | tar xz --strip=1 \
 # Invoke the build script with appropriate options
-RUN python ./build.py -j4 
-
+    && python ./build.py -j4 \
 # Strip the main binary to reduce size
-RUN strip --strip-all builds/release/bin/downward
+    && strip --strip-all builds/release/bin/downward
 
 
 #################################
 # Download and Install K*
 #################################
 WORKDIR $BASE_DIR/kstar/
-
-ENV BUILD_COMMIT_ID dc641ce
 # Fetch the code at the right commit ID from the Github repo
-RUN curl -L https://github.com/ctpelok77/kstar/archive/${BUILD_COMMIT_ID}.tar.gz | tar xz --strip=1
+RUN curl -L https://github.com/ctpelok77/kstar/archive/${KSTAR_BUILD_COMMIT_ID}.tar.gz | tar xz --strip=1 \
 # Invoke the build script with appropriate options
-RUN python ./build.py -j4 release64
+    && python ./build.py -j4 release64 \
 # Strip the main binary to reduce size
-RUN strip --strip-all builds/release64/bin/downward
+    && strip --strip-all builds/release64/bin/downward
 
 ###############################################################################
 ## Second stage: the image to run the planners
@@ -113,7 +110,9 @@ RUN locale-gen en_US.UTF-8
 ENV LANG=en_US.UTF-8 \ 
 	CXX=g++ \
 	HOME=/app \
-	BASE_DIR=/app/planners
+	BASE_DIR=/app/planners \
+    DIVERSE_FAST_DOWNWARD_PLANNER_PATH=/app/planners/cerberus \
+    DIVERSE_SCORE_COMPUTATION_PATH=/app/planners/diversescore
 
 # Create required directories
 RUN mkdir -p $HOME && mkdir -p $BASE_DIR
@@ -127,58 +126,34 @@ RUN pip install h5py keras numpy pillow scipy tensorflow-cpu subprocess32
 ## Copying Delfi planner essential files
 WORKDIR ${BASE_DIR}/delfi/
 COPY --from=builder ${BASE_DIR}/delfi/dl_model ./dl_model
-COPY --from=builder ${BASE_DIR}/delfi/plan-ipc.py .
-COPY --from=builder ${BASE_DIR}/delfi/fast-downward.py .
+COPY --from=builder ${BASE_DIR}/delfi/plan-ipc.py ${BASE_DIR}/delfi/fast-downward.py ${BASE_DIR}/delfi/create-image-from-graph.py ${BASE_DIR}/delfi/timers.py ${BASE_DIR}/delfi/symba.py ./
 COPY --from=builder ${BASE_DIR}/delfi/builds/release64/bin/ ./builds/release64/bin/
 COPY --from=builder ${BASE_DIR}/delfi/driver ./driver
-COPY --from=builder ${BASE_DIR}/delfi/create-image-from-graph.py .
-COPY --from=builder ${BASE_DIR}/delfi/timers.py .
 COPY --from=builder ${BASE_DIR}/delfi/symba/src/preprocess/preprocess ./symba/src/preprocess/preprocess
-COPY --from=builder ${BASE_DIR}/delfi/symba/src/search/downward ./symba/src/search/downward
-COPY --from=builder ${BASE_DIR}/delfi/symba/src/search/downward-1 ./symba/src/search/downward-1
-COPY --from=builder ${BASE_DIR}/delfi/symba/src/search/downward-2 ./symba/src/search/downward-2
-COPY --from=builder ${BASE_DIR}/delfi/symba/src/search/downward-4 ./symba/src/search/downward-4
-COPY --from=builder ${BASE_DIR}/delfi/symba/src/search/dispatch ./symba/src/search/dispatch
-COPY --from=builder ${BASE_DIR}/delfi/symba/src/search/unitcost ./symba/src/search/unitcost
+# COPY --from=builder ${BASE_DIR}/delfi/symba/src/search/{downward,downward-1,downward-2,downward-4,dispatch,unitcost} ./symba/src/search/
+COPY --from=builder ${BASE_DIR}/delfi/symba/src/search/downward ${BASE_DIR}/delfi/symba/src/search/downward-1 ${BASE_DIR}/delfi/symba/src/search/downward-2 ${BASE_DIR}/delfi/symba/src/search/downward-4 ${BASE_DIR}/delfi/symba/src/search/dispatch ${BASE_DIR}/delfi/symba/src/search/unitcost ./symba/src/search/
 COPY --from=builder ${BASE_DIR}/delfi/symba/src/translate ./symba/src/translate
-COPY --from=builder ${BASE_DIR}/delfi/symba.py .
-COPY --from=builder ${BASE_DIR}/delfi/symba/src/plan ./symba/src/plan
-COPY --from=builder ${BASE_DIR}/delfi/symba/src/plan-ipc ./symba/src/plan-ipc
-## Creating a run script for Delfi
-RUN echo '#!/bin/bash' > $BASE_DIR/delfi/plan-delfi.sh
-RUN echo 'LOG_FILE=run.log' >> $BASE_DIR/delfi/plan-delfi.sh
-RUN echo 'SOURCE="$( dirname "${BASH_SOURCE[0]}" )"' >> $BASE_DIR/delfi/plan-delfi.sh
-RUN echo '$SOURCE/plan-ipc.py --image-from-lifted-task $1 $2 $3 > $LOG_FILE' >> $BASE_DIR/delfi/plan-delfi.sh
-RUN echo '$SOURCE/../plans_to_json.py --domain $1 --problem $2 --plans-folder . --plan-file $3 --json-file $4' >> $BASE_DIR/delfi/plan-delfi.sh
-RUN chmod 755 $BASE_DIR/delfi/plan-delfi.sh
-RUN echo 'alias delfi="python ${BASE_DIR}/delfi/plan-ipc.py --image-from-lifted-task"' >> ~/.bashrc
+# COPY --from=builder ${BASE_DIR}/delfi/symba/src/{plan,plan-ipc} ./symba/src/
+COPY --from=builder ${BASE_DIR}/delfi/symba/src/plan ${BASE_DIR}/delfi/symba/src/plan-ipc ./symba/src/
 ## Modifying ${BASE_DIR}/delfi/plan-ipc.py to point to a correct location of abstract_structure_module
 RUN sed -i 's#src#builds/release64/bin#g' ${BASE_DIR}/delfi/plan-ipc.py
+## Copying a run script for Delfi
+COPY utils/plan-delfi.sh ${BASE_DIR}/delfi/plan-ipc.py
+
+# RUN echo 'alias delfi="python ${BASE_DIR}/delfi/plan-ipc.py --image-from-lifted-task"' >> ~/.bashrc
 
 
 ## Copying Cerberus planner essential files
 WORKDIR ${BASE_DIR}/cerberus/
-COPY --from=builder ${BASE_DIR}/cerberus/fast-downward.py .
+COPY --from=builder ${BASE_DIR}/cerberus/fast-downward.py ${BASE_DIR}/cerberus/plan-sat.py ${BASE_DIR}/cerberus/plan-agl.py ./
 COPY --from=builder ${BASE_DIR}/cerberus/builds/release/bin/ ./builds/release/bin/
 COPY --from=builder ${BASE_DIR}/cerberus/driver ./driver
-COPY --from=builder ${BASE_DIR}/cerberus/plan-sat.py .
-COPY --from=builder ${BASE_DIR}/cerberus/plan-agl.py .
-## Creating run scripts for Cerberus
-RUN echo '#!/bin/bash' > $BASE_DIR/cerberus/plan-sat.sh
-RUN echo 'LOG_FILE=run.log' >> $BASE_DIR/cerberus/plan-sat.sh
-RUN echo 'SOURCE="$( dirname "${BASH_SOURCE[0]}" )"' >> $BASE_DIR/cerberus/plan-sat.sh
-RUN echo '$SOURCE/plan-sat.py $1 $2 $3 > $LOG_FILE' >> $BASE_DIR/cerberus/plan-sat.sh
-RUN echo '$SOURCE/../plans_to_json.py --domain $1 --problem $2 --plans-folder . --plan-file $3 --json-file $4' >> $BASE_DIR/cerberus/plan-sat.sh
-RUN chmod 755 $BASE_DIR/cerberus/plan-sat.sh
-RUN echo 'alias cerberus-sat="python ${BASE_DIR}/cerberus/plan-sat.py"' >> ~/.bashrc
-## Creating run scripts for Cerberus
-RUN echo '#!/bin/bash' > $BASE_DIR/cerberus/plan-agl.sh
-RUN echo 'LOG_FILE=run.log' >> $BASE_DIR/cerberus/plan-agl.sh
-RUN echo 'SOURCE="$( dirname "${BASH_SOURCE[0]}" )"' >> $BASE_DIR/cerberus/plan-agl.sh
-RUN echo '$SOURCE/plan-agl.py $1 $2 $3 > $LOG_FILE' >> $BASE_DIR/cerberus/plan-agl.sh
-RUN echo '$SOURCE/../plans_to_json.py --domain $1 --problem $2 --plans-folder . --plan-file $3 --json-file $4' >> $BASE_DIR/cerberus/plan-agl.sh
-RUN chmod 755 $BASE_DIR/cerberus/plan-agl.sh
-RUN echo 'alias cerberus-agl="python ${BASE_DIR}/cerberus/plan-agl.py"' >> ~/.bashrc
+## Copying run scripts for Cerberus
+COPY utils/plan-cerberus-sat.sh $BASE_DIR/cerberus/plan-sat.sh
+COPY utils/plan-cerberus-agl.sh $BASE_DIR/cerberus/plan-agl.sh
+
+# RUN echo 'alias cerberus-sat="python ${BASE_DIR}/cerberus/plan-sat.py"' >> ~/.bashrc
+# RUN echo 'alias cerberus-agl="python ${BASE_DIR}/cerberus/plan-agl.py"' >> ~/.bashrc
 
 
 ## Copying ForbidIterative planner essential files
@@ -187,13 +162,9 @@ COPY --from=builder ${BASE_DIR}/diversescore/fast-downward.py .
 COPY --from=builder ${BASE_DIR}/diversescore/builds/release/bin/ ./builds/release/bin/
 COPY --from=builder ${BASE_DIR}/diversescore/driver ./driver
 WORKDIR ${BASE_DIR}/forbiditerative/
-COPY --from=builder ${BASE_DIR}/forbiditerative/fast-downward.py .
+COPY --from=builder ${BASE_DIR}/forbiditerative/fast-downward.py ${BASE_DIR}/forbiditerative/copy_plans.py ${BASE_DIR}/forbiditerative/plan.py ${BASE_DIR}/forbiditerative/planner_call.py ${BASE_DIR}/forbiditerative/timers.py ./
 COPY --from=builder ${BASE_DIR}/forbiditerative/builds/release64/bin/ ./builds/release64/bin/
 COPY --from=builder ${BASE_DIR}/forbiditerative/driver ./driver
-COPY --from=builder ${BASE_DIR}/forbiditerative/copy_plans.py .
-COPY --from=builder ${BASE_DIR}/forbiditerative/plan.py .
-COPY --from=builder ${BASE_DIR}/forbiditerative/planner_call.py .
-COPY --from=builder ${BASE_DIR}/forbiditerative/timers.py .
 COPY --from=builder ${BASE_DIR}/forbiditerative/iterative ./iterative
 # COPY --from=builder ${BASE_DIR}/forbiditerative/plan_topk.sh .
 # COPY --from=builder ${BASE_DIR}/forbiditerative/plan_unordered_topq.sh .
@@ -201,18 +172,14 @@ COPY --from=builder ${BASE_DIR}/forbiditerative/iterative ./iterative
 # COPY --from=builder ${BASE_DIR}/forbiditerative/plan_diverse_sat.sh .
 COPY utils/plan_diverse_sat.sh .
 
-ENV DIVERSE_FAST_DOWNWARD_PLANNER_PATH=${BASE_DIR}/cerberus
-ENV DIVERSE_SCORE_COMPUTATION_PATH=${BASE_DIR}/diversescore
+
 
 ## Copying K* planner essential files
 WORKDIR ${BASE_DIR}/kstar/
-COPY --from=builder ${BASE_DIR}/kstar/fast-downward.py .
+COPY --from=builder ${BASE_DIR}/kstar/fast-downward.py ${BASE_DIR}/kstar/plan_topk.sh ${BASE_DIR}/kstar/plan_topq.sh ${BASE_DIR}/kstar/plan_unordered_topq.sh ./
 COPY --from=builder ${BASE_DIR}/kstar/builds/release64/bin/ ./builds/release64/bin/
 COPY --from=builder ${BASE_DIR}/kstar/driver ./driver
-COPY --from=builder ${BASE_DIR}/kstar/plan_topk.sh .
-COPY --from=builder ${BASE_DIR}/kstar/plan_topq.sh .
-COPY --from=builder ${BASE_DIR}/kstar/plan_unordered_topq.sh .
-RUN echo 'alias kstar="python ${BASE_DIR}/kstar/fast-downward.py --build release64"' >> ~/.bashrc
+# RUN echo 'alias kstar="python ${BASE_DIR}/kstar/fast-downward.py --build release64"' >> ~/.bashrc
 
 ## For all planners
 COPY utils/plans_to_json.py $BASE_DIR/
@@ -234,13 +201,9 @@ EXPOSE 4501
 # Copy NodeJS service
 #################################
 RUN mkdir $HOME/samples
-COPY samples/domain1.pddl $HOME/samples/
-COPY samples/problem1.pddl $HOME/samples/
+COPY samples/domain1.pddl samples/problem1.pddl $HOME/samples/
 COPY config $HOME/config
 COPY storage $HOME/storage
-COPY apibase.masterppp.json $HOME/
-COPY conf.js $HOME/
-COPY app.masterppp.common.js $HOME/
-COPY app.masterppp.joint.js $HOME/
+COPY apibase.masterppp.json conf.js app.masterppp.common.js app.masterppp.joint.js $HOME/
 
 CMD ["npm", "start"]
