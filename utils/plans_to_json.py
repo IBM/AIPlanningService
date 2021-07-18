@@ -13,13 +13,16 @@ def create_plan_from_file(plan_file):
         content = f.readlines()    
     content = [x.strip() for x in content] 
     actions = [x[1:-1] for x in content if x.startswith("(")]
+    ret = { 'actions' : actions }
     cost = [x for x in content if not x.startswith("(") and "cost" in x]
     ## Assuming for now only one such entry
-    assert(len(cost) == 1)
-    q = re.findall(r'; cost = (\d+)', cost[0], re.M)
-    plan_cost = q[0]
+    # mkatz: Assumption does not hold for SymbA, no cost reported 
+    # assert(len(cost) == 1)
+    if len(cost) >= 1:
+        q = re.findall(r'; cost = (\d+)', cost[0], re.M)
+        ret['cost'] = q[0]
 
-    return { 'actions' : actions, 'cost' : plan_cost }
+    return ret
 
 
 def main(args):

@@ -6,7 +6,7 @@ RUN apt-get update && \
 
 # Install basic dev tools
 RUN pip install --upgrade pip
-RUN pip install h5py keras numpy pillow scipy tensorflow-cpu subprocess32
+# RUN pip install h5py keras numpy pillow scipy tensorflow-cpu subprocess32
 
 # Set up environment variables
 RUN locale-gen en_US.UTF-8
@@ -121,7 +121,9 @@ WORKDIR $BASE_DIR
 
 # Install basic dev tools
 RUN pip install --upgrade pip
-RUN pip install h5py keras numpy pillow scipy tensorflow-cpu subprocess32
+# RUN pip install h5py keras numpy pillow scipy tensorflow-cpu subprocess32
+COPY requirements.txt ${BASE_DIR}/
+RUN pip install -r requirements.txt
 
 ## Copying Delfi planner essential files
 WORKDIR ${BASE_DIR}/delfi/
@@ -138,8 +140,7 @@ COPY --from=builder ${BASE_DIR}/delfi/symba/src/plan ${BASE_DIR}/delfi/symba/src
 ## Modifying ${BASE_DIR}/delfi/plan-ipc.py to point to a correct location of abstract_structure_module
 RUN sed -i 's#src#builds/release64/bin#g' ${BASE_DIR}/delfi/plan-ipc.py
 ## Copying a run script for Delfi
-COPY utils/plan-delfi.sh ${BASE_DIR}/delfi/plan-ipc.py
-
+COPY utils/plan-delfi.sh ${BASE_DIR}/delfi/
 # RUN echo 'alias delfi="python ${BASE_DIR}/delfi/plan-ipc.py --image-from-lifted-task"' >> ~/.bashrc
 
 
@@ -182,6 +183,7 @@ COPY --from=builder ${BASE_DIR}/kstar/driver ./driver
 # RUN echo 'alias kstar="python ${BASE_DIR}/kstar/fast-downward.py --build release64"' >> ~/.bashrc
 
 ## For all planners
+# RUN echo "file has changed"
 COPY utils/plans_to_json.py $BASE_DIR/
 
 #################################
