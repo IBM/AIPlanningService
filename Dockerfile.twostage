@@ -183,7 +183,7 @@ COPY --from=builder ${BASE_DIR}/kstar/driver ./driver
 # RUN echo 'alias kstar="python ${BASE_DIR}/kstar/fast-downward.py --build release64"' >> ~/.bashrc
 
 ## For all planners
-RUN echo "file has changed"
+# RUN echo "file has changed"
 COPY utils/plans_to_json.py $BASE_DIR/
 
 #################################
