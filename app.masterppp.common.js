@@ -88,11 +88,24 @@ function runAndCatch(command, timeout) {
     });
 }
 
+// Coerce user-supplied numeric task parameters to real numbers. These values are
+// interpolated into a shell command line, so they must never remain strings.
+function sanitizeNumplans(value) {
+    let n = parseInt(value);
+    return Number.isFinite(n) ? n : 5;
+}
+
+function sanitizeQualitybound(value) {
+    let q = parseFloat(value);
+    return Number.isFinite(q) ? q : 1.0;
+}
+
 function runPlanner(pname, pconfig, task, logger) {
     let domain = task.domain;
-    let problem = task.problem; 
-    let numplans = task.numplans;
-    let qualitybound = task.qualitybound;
+    let problem = task.problem;
+    // Defense in depth: sanitize here as well, since this is the shell-command sink.
+    let numplans = sanitizeNumplans(task.numplans);
+    let qualitybound = sanitizeQualitybound(task.qualitybound);
     var p_tmpFiles = [
         tmp.tmpName({ template: '/tmp/domain-XXXXXX' }),
         tmp.tmpName({ template: '/tmp/problem-XXXXXX' }),
@@ -207,7 +220,18 @@ function extractZippedTask(req, res, logger) {
                         f.nodeStream().pipe(fs.createWriteStream(fname)).on('finish', () => {
                             logger.debug("JSON dumped, about to read " + fname);
                             fs.promises.readFile(fname, 'utf-8').then(content => {
-                                resolve(JSON.parse(content));
+                                let parsed = JSON.parse(content);
+                                if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                                    throw new Error('task.json must contain a JSON object');
+                                }
+                                if (typeof parsed.domain !== 'string' || !parsed.domain ||
+                                    typeof parsed.problem !== 'string' || !parsed.problem) {
+                                    throw new Error('task.json must contain string "domain" and "problem"');
+                                }
+                                // same numeric validation as the plain JSON path
+                                parsed.numplans = sanitizeNumplans(parsed.numplans);
+                                parsed.qualitybound = sanitizeQualitybound(parsed.qualitybound);
+                                resolve(parsed);
                             }).catch(reject);
                         });
                     });    
@@ -356,7 +380,7 @@ module.exports.plannerSelector = function(categ, categObj, logger, plannersConfi
 module.exports.plannerSelectorZipped = function(categ, categObj, logger, plannersConfig) {
     const promiseFunc = this.plannerSelectorPromise;
     return function(req, res) {
-        extractZippedTask(req, res, logger).then(() => {
+        extractZippedTask(req, res, logger).then(task => {
             if(!task) { return; } // already returned an error
             promiseFunc(categ, categObj, logger, plannersConfig, task).then(ret => {
                 processZippedOutput(res, ret, logger);
