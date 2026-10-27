@@ -18,7 +18,7 @@
     "bl": "^4.0.3",
     "bluebird": "^3.5.1",
     "body-parser": "^1.20.9",
-    "cfenv": "^1.2.4",
+    "cfenv": "^1.2.7",
     "child-process-promise": "^2.2.1",
     "connect-timeout": "^1.9.0",
     "express": "^4.22.3",
