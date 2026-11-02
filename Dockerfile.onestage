@@ -1,12 +1,14 @@
-FROM ubuntu:18.04
+# Python 3.11 is required by the pinned dependencies (Pillow 13, TensorFlow 2.15)
+FROM python:3.11-bookworm
 
 RUN apt-get update && \
     apt-get install -y locales jq vim wget curl gawk \
-    cmake g++ g++-multilib make python python-dev python-pip
+    cmake g++ g++-multilib make
 
 # Install basic dev tools
 RUN pip install --upgrade pip
-RUN pip install h5py keras numpy pillow scipy tensorflow-cpu subprocess32
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install -r /tmp/requirements.txt
 
 RUN curl -sL https://deb.nodesource.com/setup_12.x | bash && apt-get install -y nodejs build-essential
 

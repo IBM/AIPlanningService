@@ -92,17 +92,12 @@ RUN curl -L https://github.com/ctpelok77/kstar/archive/${KSTAR_BUILD_COMMIT_ID}.
 ## Also, installing nodejs here.
 ###############################################################################
 
-FROM ubuntu:18.04
-
-# Install any package needed to *run* the planner
-# RUN apt-get update && apt-get install --no-install-recommends -y \
-#     python python-setuptools python-pip \
-#     && rm -rf /var/lib/apt/lists/*
+# Python 3.11 is required by the pinned dependencies (Pillow 13, TensorFlow 2.15);
+# the image provides `python` -> Python 3.11, which the planner scripts' shebangs use.
+FROM python:3.11-bookworm
 
 RUN apt-get update && \
     apt-get install -y locales curl gawk \
-    # cmake g++ g++-multilib make \
-    python python-dev python-pip \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up environment variables
