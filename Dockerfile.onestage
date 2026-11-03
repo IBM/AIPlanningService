@@ -1,4 +1,4 @@
-# Python 3.11 is required by the pinned dependencies (Pillow 13, TensorFlow 2.15)
+# Python 3.11 is required by the pinned dependencies (Pillow 13, TensorFlow 2.20)
 FROM python:3.11-bookworm
 
 RUN apt-get update && \

@@ -92,7 +92,7 @@ RUN curl -L https://github.com/ctpelok77/kstar/archive/${KSTAR_BUILD_COMMIT_ID}.
 ## Also, installing nodejs here.
 ###############################################################################
 
-# Python 3.11 is required by the pinned dependencies (Pillow 13, TensorFlow 2.15);
+# Python 3.11 is required by the pinned dependencies (Pillow 13, TensorFlow 2.20);
 # the image provides `python` -> Python 3.11, which the planner scripts' shebangs use.
 FROM python:3.11-bookworm
 
